@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const BASE = "/api";
+const BASE = "https://qless-api-een4.onrender.com/api";
 
 const api = {
   token: () => localStorage.getItem("ql_token"),
