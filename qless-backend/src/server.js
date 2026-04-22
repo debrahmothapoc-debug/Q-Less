@@ -81,6 +81,9 @@ app.get("/setup", async (req, res) => {
     const drvs = [["Sipho Dlamini","0711000001","GP 34-56 AB"],["Thabo Mokoena","0711000002","GP 12-78 CD"],["Bongani Zulu","0711000003","GP 90-11 EF"],["Lerato Sithole","0711000004","GP 45-23 GH"],["Andile Nkosi","0711000005","CA 67-34 IJ"]];
     const times = ["05:00","05:30","06:00","06:30","07:00","07:30","08:00","08:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00"];
     const today = new Date().toISOString().slice(0,10);
+   await pool.query(`DELETE FROM time_slots WHERE id NOT IN (SELECT MIN(id) FROM time_slots GROUP BY route_id, driver_id, departure_time, slot_date)`);
+await pool.query(`DELETE FROM routes WHERE id NOT IN (SELECT MIN(id) FROM routes GROUP BY from_place, to_place)`);
+
     const routeIds = [];
     for (const [f,t,d,fare] of rts) {
       const r = await pool.query(`INSERT INTO routes (from_place,to_place,duration_min,fare_rands) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[f,t,d,fare]);
