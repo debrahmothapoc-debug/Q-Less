@@ -1,14 +1,12 @@
 # render.yaml — Q-Less Full Stack Deployment
-# Deploys: PostgreSQL DB + Node.js API + React Frontend
-# Docs: https://render.com/docs/blueprint-spec
 
 services:
   # ── Backend API (Node.js / Express) ─────────────────────
   - type: web
     name: qless-api
     runtime: node
-    region: oregon          # closest to SA is oregon or frankfurt
-    plan: free              # upgrade to starter ($7/mo) for production
+    region: oregon
+    plan: free
     rootDir: qless-backend
     buildCommand: npm install
     startCommand: npm start
@@ -39,24 +37,16 @@ services:
           name: qless-db
           property: password
       - key: JWT_SECRET
-        generateValue: true   # Render auto-generates a secure random value
+        generateValue: true
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CLIENT_URL
-        fromService:
-          name: qless-frontend
-          type: web
-          property: host
-      # Add these manually in the Render dashboard:
-      # AT_API_KEY      → your Africa's Talking API key
-      # AT_USERNAME     → your Africa's Talking username
-      # AT_SENDER_ID    → Q-Less
+        value: https://qless-frontend.onrender.com
 
   # ── Frontend (React / Vite static site) ─────────────────
   - type: web
     name: qless-frontend
     runtime: static
-    region: oregon
     plan: free
     rootDir: qless-frontend
     buildCommand: npm install && npm run build
@@ -64,18 +54,14 @@ services:
     routes:
       - type: rewrite
         source: /*
-        destination: /index.html   # SPA fallback
+        destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          name: qless-api
-          type: web
-          property: host
+        value: https://qless-api.onrender.com
 
 # ── PostgreSQL Database ──────────────────────────────────
 databases:
   - name: qless-db
     databaseName: qless_db
     user: qless_user
-    region: oregon
-    plan: free              # 1GB storage, 97 connection limit
+    plan: free
