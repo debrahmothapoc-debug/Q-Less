@@ -1,0 +1,81 @@
+# render.yaml — Q-Less Full Stack Deployment
+# Deploys: PostgreSQL DB + Node.js API + React Frontend
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ── Backend API (Node.js / Express) ─────────────────────
+  - type: web
+    name: qless-api
+    runtime: node
+    region: oregon          # closest to SA is oregon or frankfurt
+    plan: free              # upgrade to starter ($7/mo) for production
+    rootDir: qless-backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DB_HOST
+        fromDatabase:
+          name: qless-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: qless-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: qless-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: qless-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: qless-db
+          property: password
+      - key: JWT_SECRET
+        generateValue: true   # Render auto-generates a secure random value
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_URL
+        fromService:
+          name: qless-frontend
+          type: web
+          property: host
+      # Add these manually in the Render dashboard:
+      # AT_API_KEY      → your Africa's Talking API key
+      # AT_USERNAME     → your Africa's Talking username
+      # AT_SENDER_ID    → Q-Less
+
+  # ── Frontend (React / Vite static site) ─────────────────
+  - type: web
+    name: qless-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: qless-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html   # SPA fallback
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: qless-api
+          type: web
+          property: host
+
+# ── PostgreSQL Database ──────────────────────────────────
+databases:
+  - name: qless-db
+    databaseName: qless_db
+    user: qless_user
+    region: oregon
+    plan: free              # 1GB storage, 97 connection limit
