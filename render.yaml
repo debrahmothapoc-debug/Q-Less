@@ -47,7 +47,6 @@ services:
   - type: web
     name: qless-frontend
     runtime: static
-    plan: free
     rootDir: qless-frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
