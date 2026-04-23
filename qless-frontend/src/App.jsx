@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import DriverApp from "./DriverApp";
 const BASE = "https://qless-api-een4.onrender.com/api";
-const BASE = "https://qless-api-een4.onrender.com/api";
-
 const api = {
   token: () => localStorage.getItem("ql_token"),
   setToken: (t) => t ? localStorage.setItem("ql_token", t) : localStorage.removeItem("ql_token"),
