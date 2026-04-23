@@ -3,7 +3,7 @@ import DriverApp from "./DriverApp";
 const BASE = "https://qless-api-een4.onrender.com/api";
 const api = {
   token: () => localStorage.getItem("ql_token"),
-  setToken: (t) => t ? localStorage.setItem("ql_token", t) : localStorage.removeItem("
+  setToken: (t) => t ? localStorage.setItem("ql_token", t) : localStorage.removeItem("(ql_token"),
   async req(method, path, body) {
     const h = { "Content-Type": "application/json" };
     if (api.token()) h["Authorization"] = "Bearer " + api.token();
