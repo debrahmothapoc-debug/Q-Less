@@ -108,30 +108,6 @@ app.get("/setup", async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-
-    const routeIds = [];
-    for (const [f,t,d,fare] of rts) {
-      const r = await pool.query(`INSERT INTO routes (from_place,to_place,duration_min,fare_rands) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[f,t,d,fare]);
-      if (r.rows[0]) routeIds.push(r.rows[0].id);
-    }
-    if (routeIds.length === 0) { const r = await pool.query(`SELECT id FROM routes ORDER BY created_at`); routeIds.push(...r.rows.map(x=>x.id)); }
-    const driverIds = [];
-    for (let i = 0; i < drvs.length; i++) {
-      const [name,phone,plate] = drvs[i];
-      const u = await pool.query(`INSERT INTO users (name,phone,password_hash,role) VALUES ($1,$2,$3,'driver') ON CONFLICT (phone) DO UPDATE SET name=EXCLUDED.name RETURNING id`,[name,phone,hash]);
-      const d = await pool.query(`INSERT INTO drivers (user_id,route_id,taxi_plate,capacity) VALUES ($1,$2,$3,15) ON CONFLICT (user_id,route_id) DO UPDATE SET taxi_plate=EXCLUDED.taxi_plate RETURNING id`,[u.rows[0].id,routeIds[i],plate]);
-      driverIds.push(d.rows[0].id);
-    }
-    for (let i = 0; i < routeIds.length; i++) {
-      for (const t of times) {
-        await pool.query(`INSERT INTO time_slots (route_id,driver_id,departure_time,slot_date,capacity) VALUES ($1,$2,$3,$4,15) ON CONFLICT DO NOTHING`,[routeIds[i],driverIds[i],t,today]);
-      }
-    }
-    await pool.query(`INSERT INTO users (name,phone,password_hash,role) VALUES ('Demo Commuter','0720000001',$1,'commuter') ON CONFLICT DO NOTHING`,[ch]);
-    res.json({ success: true, message: "Setup complete!", routes: routeIds.length, date: today });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
 // ── 404 handler ───────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.path} not found.` });
