@@ -58,7 +58,7 @@ app.get("/health", (req, res) => {
     time:   new Date().toISOString(),
   });
 });
-app.post("/test-booking", async (req, res) => {
+app.get("/test-booking", async (req, res) => {
   try {
     const { pool } = require("./db");
     const slots = await pool.query(`SELECT id, departure_time, slot_date FROM time_slots LIMIT 5`);
