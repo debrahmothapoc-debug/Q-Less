@@ -24,7 +24,6 @@ router.post("/",
   // For guest (unauthenticated) bookings:
   body("name").if((_, { req }) => !req.headers.authorization)
     .trim().notEmpty().withMessage("Name required for guest booking"),
-  body("phone").if((_, { req }) => !req.headers.authorization)
     .trim().matches(/^0\d{9}$/).withMessage("Valid SA mobile number required"),
   validateRequest,
   async (req, res, next) => {
