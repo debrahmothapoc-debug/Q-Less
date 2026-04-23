@@ -1,4 +1,42 @@
 import { useState, useEffect } from "react";
+import DriverApp from "./DriverApp";
+const BASE = "https://qless-api-een4.onrender.com/api";
+const api = {
+  token: () => localStorage.getItem("ql_token"),
+  setToken: (t) => t ? localStorage.setItem("ql_token", t) : localStorage.removeItem("
+  async req(method, path, body) {
+    const h = { "Content-Type": "application/json" };
+    if (api.token()) h["Authorization"] = "Bearer " + api.token();
+    const r = await fetch(BASE + path, { method, headers: h, body: body ? JSON.stringi
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Something went wrong");
+    return d;
+  },
+  get: (p) => api.req("GET", p),
+  post: (p, b) => api.req("POST", p, b),
+  del: (p) => api.req("DELETE", p),
+  patch: (p, b) => api.req("PATCH", p, b),
+};
+function Alert({ t, children }) {
+  const colors = {
+    i: { bg:"#e8efff", color:"#1a3a8f", border:"1px solid rgba(26,58,143,0.14)" },
+    s: { bg:"#dcfce7", color:"#16a34a", border:"1px solid rgba(22,163,74,0.2)" },
+    e: { bg:"#fee2e2", color:"#dc2626", border:"1px solid rgba(220,38,38,0.2)" },
+  };
+  const c = colors[t] || colors.i;
+  return (
+    <div style={{borderRadius:9,padding:"10px 13px",fontSize:12,display:"flex",alignIt
+      <span>{children}</span>
+</div> );
+}
+function Skel() {
+  return (
+    <div style={{background:"white",borderRadius:14,padding:16,marginBottom:12,boxShad
+      <div style={{height:14,width:"55%",background:"#f0f0f0",borderRadius:7}}/>
+      <div style={{height:12,width:"75%",background:"#f0f0f0",borderRadius:7}}/>
+</div> );
+}
+import { useState, useEffect } from "react";
 
 const BASE = "https://qless-api-een4.onrender.com/api";
 
