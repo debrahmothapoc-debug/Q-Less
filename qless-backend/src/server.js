@@ -58,6 +58,14 @@ app.get("/health", (req, res) => {
     time:   new Date().toISOString(),
   });
 });
+app.post("/test-booking", async (req, res) => {
+  try {
+    const { pool } = require("./db");
+    const slots = await pool.query(`SELECT id, departure_time, slot_date FROM time_slots LIMIT 5`);
+    const users = await pool.query(`SELECT id, phone FROM users LIMIT 3`);
+    res.json({ slots: slots.rows, users: users.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── API routes ────────────────────────────────────────────
 app.use("/api/auth",    authRoutes);
