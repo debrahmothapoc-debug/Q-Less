@@ -68,21 +68,46 @@ app.use("/api/driver",  driverRoutes);
 app.get("/setup", async (req, res) => {
   try {
     const { pool } = require("./db");
-    await pool.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name VARCHAR(120) NOT NULL, phone VARCHAR(20) NOT NULL UNIQUE, password_hash VARCHAR(255), role VARCHAR(10) NOT NULL DEFAULT 'commuter', is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS routes (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), from_place VARCHAR(120) NOT NULL, to_place VARCHAR(120) NOT NULL, duration_min INTEGER NOT NULL, fare_rands NUMERIC(6,2) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS drivers (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE, taxi_plate VARCHAR(20) NOT NULL, capacity INTEGER NOT NULL DEFAULT 15, rating NUMERIC(3,1) NOT NULL DEFAULT 5.0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(user_id, route_id));`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS time_slots (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE, driver_id UUID NOT NULL REFERENCES drivers(id) ON DELETE CASCADE, departure_time TIME NOT NULL, slot_date DATE NOT NULL DEFAULT CURRENT_DATE, capacity INTEGER NOT NULL DEFAULT 15, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(route_id, driver_id, departure_time, slot_date));`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS bookings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), booking_ref VARCHAR(12) NOT NULL UNIQUE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE, seats INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 4), status VARCHAR(20) NOT NULL DEFAULT 'confirmed', sms_sent BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`);
+    await pool.query(`DROP TABLE IF EXISTS bookings CASCADE`);
+    await pool.query(`DROP TABLE IF EXISTS time_slots CASCADE`);
+    await pool.query(`DROP TABLE IF EXISTS drivers CASCADE`);
+    await pool.query(`DROP TABLE IF EXISTS routes CASCADE`);
+    await pool.query(`DROP TABLE IF EXISTS users CASCADE`);
+    await pool.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
+    await pool.query(`CREATE TABLE users (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name VARCHAR(120) NOT NULL, phone VARCHAR(20) NOT NULL UNIQUE, password_hash VARCHAR(255), role VARCHAR(10) NOT NULL DEFAULT 'commuter', is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    await pool.query(`CREATE TABLE routes (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), from_place VARCHAR(120) NOT NULL, to_place VARCHAR(120) NOT NULL, duration_min INTEGER NOT NULL, fare_rands NUMERIC(6,2) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    await pool.query(`CREATE TABLE drivers (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE, taxi_plate VARCHAR(20) NOT NULL, capacity INTEGER NOT NULL DEFAULT 15, rating NUMERIC(3,1) NOT NULL DEFAULT 5.0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(user_id, route_id))`);
+    await pool.query(`CREATE TABLE time_slots (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE, driver_id UUID NOT NULL REFERENCES drivers(id) ON DELETE CASCADE, departure_time TIME NOT NULL, slot_date DATE NOT NULL DEFAULT CURRENT_DATE, capacity INTEGER NOT NULL DEFAULT 15, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(route_id, driver_id, departure_time, slot_date))`);
+    await pool.query(`CREATE TABLE bookings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), booking_ref VARCHAR(12) NOT NULL UNIQUE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE, seats INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 4), status VARCHAR(20) NOT NULL DEFAULT 'confirmed', sms_sent BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     const bcrypt = require("bcryptjs");
-    const hash = await bcrypt.hash("Driver@123", 10);
+    const dh = await bcrypt.hash("Driver@123", 10);
     const ch = await bcrypt.hash("Commuter@123", 10);
     const rts = [["Soweto (Bara)","Johannesburg CBD",45,14.50],["Tembisa","Sandton",55,18.00],["Katlehong","Germiston",30,11.00],["Mamelodi","Pretoria CBD",40,13.00],["Mitchell's Plain","Cape Town CBD",50,16.00]];
     const drvs = [["Sipho Dlamini","0711000001","GP 34-56 AB"],["Thabo Mokoena","0711000002","GP 12-78 CD"],["Bongani Zulu","0711000003","GP 90-11 EF"],["Lerato Sithole","0711000004","GP 45-23 GH"],["Andile Nkosi","0711000005","CA 67-34 IJ"]];
     const times = ["05:00","05:30","06:00","06:30","07:00","07:30","08:00","08:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00"];
     const today = new Date().toISOString().slice(0,10);
-   await pool.query(`DELETE FROM time_slots WHERE id NOT IN (SELECT MIN(id) FROM time_slots GROUP BY route_id, driver_id, departure_time, slot_date)`);
-await pool.query(`DELETE FROM routes WHERE id NOT IN (SELECT MIN(id) FROM routes GROUP BY from_place, to_place)`);
+    const routeIds = [];
+    for (const [f,t,d,fare] of rts) {
+      const r = await pool.query(`INSERT INTO routes (from_place,to_place,duration_min,fare_rands) VALUES ($1,$2,$3,$4) RETURNING id`,[f,t,d,fare]);
+      routeIds.push(r.rows[0].id);
+    }
+    const driverIds = [];
+    for (let i = 0; i < drvs.length; i++) {
+      const [name,phone,plate] = drvs[i];
+      const u = await pool.query(`INSERT INTO users (name,phone,password_hash,role) VALUES ($1,$2,$3,'driver') RETURNING id`,[name,phone,dh]);
+      const d = await pool.query(`INSERT INTO drivers (user_id,route_id,taxi_plate) VALUES ($1,$2,$3) RETURNING id`,[u.rows[0].id,routeIds[i],plate]);
+      driverIds.push(d.rows[0].id);
+    }
+    for (let i = 0; i < routeIds.length; i++) {
+      for (const t of times) {
+        await pool.query(`INSERT INTO time_slots (route_id,driver_id,departure_time,slot_date) VALUES ($1,$2,$3,$4)`,[routeIds[i],driverIds[i],t,today]);
+      }
+    }
+    await pool.query(`INSERT INTO users (name,phone,password_hash,role) VALUES ('Demo Commuter','0720000001',$1,'commuter')`,[ch]);
+    res.json({ success: true, message: "Clean setup complete!", routes: routeIds.length, date: today });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 
     const routeIds = [];
     for (const [f,t,d,fare] of rts) {
