@@ -1,23 +1,29 @@
- const express = require("express");
+const express = require("express");
 const db = require("../db");
 const { authenticate } = require("../middleware/auth");
+
 const router = express.Router();
+
 function genRef() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let ref = "QL-";
   for (let i = 0; i < 4; i++) ref += chars[Math.floor(Math.random() * chars.length)];
   return ref;
 }
+
 // POST /api/bookings — create a booking
 router.post("/", async (req, res, next) => {
   const client = await db.getClient();
   try {
     await client.query("BEGIN");
+
     const { time_slot_id, seats, name, phone } = req.body;
+
     if (!time_slot_id || !seats) {
       await client.query("ROLLBACK");
       return res.status(422).json({ error: "time_slot_id and seats are required." });
-}
+    }
+
     // Get or create user
     let userId;
     const authHeader = req.headers.authorization;
@@ -33,56 +39,57 @@ router.post("/", async (req, res, next) => {
     } else {
       if (!name || !phone) {
         await client.query("ROLLBACK");
-        return res.status(422).json({ error: "Name and phone are required for guest bo
+        return res.status(422).json({ error: "Name and phone are required for guest booking." });
       }
       const existing = await client.query(
-oking."
-     "SELECT id FROM users WHERE phone = $1", [phone]
-  );
-  if (existing.rows.length) {
-    userId = existing.rows[0].id;
-  } else {
-    const newUser = await client.query(
-      "INSERT INTO users (name, phone, role) VALUES ($1, $2, 'commuter') RETURNING
-      [name, phone]
-    );
-    userId = newUser.rows[0].id;
-  }
-}
-// Check slot exists and has space
-const slotRes = await client.query(`
-  SELECT ts.id, ts.capacity, ts.departure_time, ts.slot_date,
-         r.from_place, r.to_place, r.fare_rands,
-         COALESCE(SUM(b.seats) FILTER (WHERE b.status = 'confirmed'), 0)::int AS b
-  FROM time_slots ts
-  JOIN routes r ON r.id = ts.route_id
-  LEFT JOIN bookings b ON b.time_slot_id = ts.id
-  WHERE ts.id = $1
-  GROUP BY ts.id, r.from_place, r.to_place, r.fare_rands
-`, [time_slot_id]);
-if (!slotRes.rows.length) {
-  await client.query("ROLLBACK");
-  return res.status(404).json({ error: "Time slot not found." });
-}
-const slot = slotRes.rows[0];
-const available = slot.capacity - slot.booked;
-if (available < seats) {
-  await client.query("ROLLBACK");
-  return res.status(409).json({ error: "Not enough seats available.", available })
-}
-// Create booking
-const bookingRef = genRef();
-const result = await client.query(
-  "INSERT INTO bookings (booking_ref, user_id, time_slot_id, seats) VALUES ($1, $2
-  [bookingRef, userId, time_slot_id, seats]
-);
-await client.query("COMMIT");
-id",
-ooked
-;
-, $3, $
+        "SELECT id FROM users WHERE phone = $1", [phone]
+      );
+      if (existing.rows.length) {
+        userId = existing.rows[0].id;
+      } else {
+        const newUser = await client.query(
+          "INSERT INTO users (name, phone, role) VALUES ($1, $2, 'commuter') RETURNING id",
+          [name, phone]
+        );
+        userId = newUser.rows[0].id;
+      }
+    }
 
-     res.status(201).json({
+    // Check slot exists and has space
+    const slotRes = await client.query(`
+      SELECT ts.id, ts.capacity, ts.departure_time, ts.slot_date,
+             r.from_place, r.to_place, r.fare_rands,
+             COALESCE(SUM(b.seats) FILTER (WHERE b.status = 'confirmed'), 0)::int AS booked
+      FROM time_slots ts
+      JOIN routes r ON r.id = ts.route_id
+      LEFT JOIN bookings b ON b.time_slot_id = ts.id
+      WHERE ts.id = $1
+      GROUP BY ts.id, r.from_place, r.to_place, r.fare_rands
+    `, [time_slot_id]);
+
+    if (!slotRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Time slot not found." });
+    }
+
+    const slot = slotRes.rows[0];
+    const available = slot.capacity - slot.booked;
+
+    if (available < seats) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Not enough seats available.", available });
+    }
+
+    // Create booking
+    const bookingRef = genRef();
+    const result = await client.query(
+      "INSERT INTO bookings (booking_ref, user_id, time_slot_id, seats) VALUES ($1, $2, $3, $4) RETURNING *",
+      [bookingRef, userId, time_slot_id, seats]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(201).json({
       booking: result.rows[0],
       slot: {
         departure_time: slot.departure_time,
@@ -93,12 +100,15 @@ ooked
       },
       message: "Booking confirmed!",
     });
+
   } catch (err) {
     await client.query("ROLLBACK");
     next(err);
   } finally {
     client.release();
-} });
+  }
+});
+
 // GET /api/bookings/my — get logged in user's bookings
 router.get("/my", authenticate, async (req, res, next) => {
   try {
@@ -120,10 +130,20 @@ router.get("/my", authenticate, async (req, res, next) => {
     res.json(rows);
   } catch (err) { next(err); }
 });
+
 // DELETE /api/bookings/:id — cancel a booking
 router.delete("/:id", authenticate, async (req, res, next) => {
   try {
     const { rows } = await db.query(
-"SELECT * FROM bookings WHERE id = $1", [req.params.id]
+      "SELECT * FROM bookings WHERE id = $1", [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: "Booking not found." });
+    if (rows[0].user_id !== req.user.id) return res.status(403).json({ error: "Access denied." });
+    await db.query(
+      "UPDATE bookings SET status = 'cancelled' WHERE id = $1", [req.params.id]
+    );
+    res.json({ message: "Booking cancelled.", booking_ref: rows[0].booking_ref });
+  } catch (err) { next(err); }
+});
 
- 
+module.exports = router;
