@@ -123,6 +123,29 @@ app.use((req, res) => {
 
 // ── Global error handler ──────────────────────────────────
 app.use(errorHandler);
+// ── Auto-generate daily slots at midnight ─────────────────
+async function generateDailySlots() {
+  try {
+    const { pool } = require("./db");
+    const today = new Date().toISOString().slice(0, 10);
+    const times = ["05:00","05:30","06:00","06:30","07:00","07:30","08:00","08:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00"];
+    const drivers = await pool.query(`SELECT d.id, d.route_id FROM drivers d JOIN users u ON u.id = d.user_id WHERE u.is_active = TRUE`);
+    let count = 0;
+    for (const driver of drivers.rows) {
+      for (const t of times) {
+        await pool.query(`INSERT INTO time_slots (route_id, driver_id, departure_time, slot_date, capacity) VALUES ($1, $2, $3, $4, 15) ON CONFLICT DO NOTHING`, [driver.route_id, driver.id, t, today]);
+        count++;
+      }
+    }
+    console.log(`[SLOTS] Generated ${count} slots for ${today}`);
+  } catch(e) {
+    console.error("[SLOTS] Error:", e.message);
+  }
+}
+
+// Run on startup and then every 24 hours
+generateDailySlots();
+setInterval(generateDailySlots, 24 * 60 * 60 * 1000);
 
 // ── Start ─────────────────────────────────────────────────
 app.listen(PORT, () => {
