@@ -178,10 +178,13 @@ function CreateDriverForm({ routes, onCreated }) {
     setLoading(true);
     try {
       // Register user as driver
-      const user = await api.post("/auth/register", { name, phone, password, role: "driver" });
-      api.setToken(user.token);
-      // Create driver profile
-      await api.post("/driver/profile", { taxi_plate: plate, route_id: parseInt(routeId) });
+      await api.post("/admin/drivers", { 
+  name, 
+  phone, 
+  password, 
+  taxi_plate: plate, 
+  route_id: parseInt(routeId) 
+});
       setSuccess(`✅ Driver account created for ${name}! They can now login with ${phone} and their password.`);
       setName(""); setPhone(""); setPassword(""); setPlate(""); setRouteId("");
       onCreated();
