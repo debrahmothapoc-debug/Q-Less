@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import DriverApp from "./DriverApp";
+import AdminApp from "./AdminApp";
+
 const BASE = "https://qless-api-een4.onrender.com/api";
+
 const api = {
   token: () => localStorage.getItem("ql_token"),
   setToken: (t) => t ? localStorage.setItem("ql_token", t) : localStorage.removeItem("ql_token"),
@@ -94,6 +97,11 @@ export default function App() {
     setLoading(true);
     api.get("/bookings/my").then(setMyB).catch(e => setErr(e.message)).finally(() => setLoading(false));
   }, [view, user]);
+
+  // ── Admin route ─────────────────────────────────────────
+  if (window.location.pathname === "/admin") {
+    return <AdminApp />;
+  }
 
   // ── Driver users get the full driver experience ───────────
   if (user && user.role === "driver") {
